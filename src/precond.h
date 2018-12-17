@@ -9,10 +9,10 @@
 
 Matrix precond_jacobi(Matrix A);
 
-Matrix precond_ssor(Matrix A);
+Matrix precond_ssor(Matrix A, real omega);
 
-Matrix precond_spectral(Matrix A);
+Matrix precond_spectral(Matrix A, int order);
 
-void compt_eigenspace(Matrix A, Matrix eigenvectors, Matrix eigenvalues);
+Matrix compt_eigenvalues(Matrix A);
 
 #endif //EXAMTD_PRECOND_H

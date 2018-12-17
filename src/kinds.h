@@ -28,3 +28,5 @@ typedef float real;
 #endif //EXAMTD_KINDS_H
 
 #define for_range(index, max) for(int index = 0; index < max; ++index)
+#define max(x, y) ((x) >= (y)) ? (x) : (y)
+#define min(x, y) ((x) <= (y)) ? (x) : (y)
