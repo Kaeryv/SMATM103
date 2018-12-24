@@ -85,6 +85,7 @@ int main(int argc, char **argv)
 
 
   Matrix A = load_from_file(matrix_file, MATRIX);
+  A.type = DENSE;
 
   dump(compt_eigenvalues(A), output_token);
   Matrix b = load_from_file("./data/donneeRHS.dat", VECTOR);
@@ -150,14 +151,11 @@ int main(int argc, char **argv)
     }
       break;
     case SPECTRAL:
-      M = precond_spectral(A, 50);
+      M = precond_spectral(A, 100);
       break;
   }
-
-  if (pcgradient(A, b, x, M, profile_file))
-  {
-    fprintf(stderr, "An error occured, pcgradient failed to reach convergence.");
-  }
+  A.type = DENSE;
+  pcgradient(A, b, x, M, profile_file);
 
   dump(x, "x.txt");
   return 0;

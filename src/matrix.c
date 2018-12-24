@@ -17,7 +17,7 @@ int allocate(Matrix *matrix)
 {
   if (matrix->n != 0 && matrix->m != 0)
   {
-    matrix->data = (real *) calloc(matrix->m * matrix->n, sizeof(real));
+    matrix->data = (double *) calloc(matrix->m * matrix->n, sizeof(double));
     if (matrix->data == NULL)
     {
       fprintf(stderr, "Matrix allocation failed.");
@@ -37,9 +37,9 @@ void deallocate(Matrix matrix)
 }
 
 
-real dot(Matrix A, Matrix B)
+double dot(Matrix A, Matrix B)
 {
-  real res = 0.;
+  double res = 0.;
   if (A.m == B.m)
   {
     for (int i = 0; i < A.m; ++i)
@@ -68,12 +68,10 @@ void print(Matrix matrix)
 
 Matrix copy(Matrix src)
 {
-  Matrix result;
-  result.m = src.m;
-  result.n = src.n;
-  result.type = src.type;
-  result.kl = src.kl;
-  result.ku = src.ku;
+  // Standard copy
+  Matrix result = src;
+
+  // Deep copy the data
   allocate(&result);
   for (int i = 0; i < result.m * result.n; ++i)
     result.data[i] = src.data[i];
@@ -112,31 +110,42 @@ int s_matmul_transb(Matrix A, Matrix B, Matrix C)
 Matrix load_from_file(const char *path, enum loadable L)
 {
   FILE *file = fopen(path, "r");
+
   if (file == NULL)
-  { fprintf(stderr, "Failed to open file %s.", path); }
-  unsigned n = 0;
-  fscanf(file, "%d", &n);
-  if (n <= 0)
-  { fprintf(stderr, "Failed to read matrix file."); }
-
-  Matrix result = {.m=n, .n=n, .data=NULL};
-
-
-  if (L == VECTOR)
   {
-    result.n = 1;
+    fprintf(stderr, "Failed to open file %s.", path);
   }
-  else
+
+  Matrix result = {.m=0, .n=0, .data=NULL};
+  unsigned n = 0;
+  switch (L)
   {
-    n = n * n;
+    case VECTOR:
+      fscanf(file, "%d", &n);
+      result.m = n;
+      result.n = 1;
+      break;
+    case MATRIX:
+      fscanf(file, "%d", &n);
+      result.m = n;
+      result.n = n;
+      n = n * n;
+      break;
+    case CHOLES:
+      result.m = 100;
+      result.n = 100;
+      n = 10000;
+      break;
   }
 
   allocate(&result);
 
-  for (int i = 0; i < n; ++i)
+  for (unsigned i = 0; i < n; i++)
   {
     fscanf(file, "%lf", &result.data[i]);
   }
+  fclose(file);
+
   return result;
 }
 
@@ -164,7 +173,7 @@ void dump_profile(Matrix matrix, const char *path)
   fclose(file);
 }
 
-Matrix solve(Matrix A, Matrix b)
+Matrix solve(Matrix *A, Matrix b)
 {
   Matrix result = {.m=b.m, .n=1, .data=NULL};
   allocate(&result);
@@ -172,50 +181,74 @@ Matrix solve(Matrix A, Matrix b)
   return result;
 }
 
-void ssolve(Matrix A, Matrix b, Matrix x)
+void ssolve(Matrix *A, Matrix b, Matrix x)
 {
+  // We always use x as b in routines
   cblas_dcopy(b.m, b.data, 1, x.data, 1);
-  if (A.type == DIAGONAL)
+
+  //
+  if (A->type == DIAGONAL)
   {
     for_range(i, x.m)
     {
-      AT(x, i, 0) /= AT(A, i, i);
+      AT(x, i, 0) /= AT((*A), i, i);
     }
   }
   else
   {
-    if (A.type == SDP)
+    if (A->type == SDP)
     {
-      posv(LAPACK_COL_MAJOR, 'L', A.m,
-           x.n, A.data, A.n, x.data,
+      Matrix tmp = copy(*A);
+      posv(LAPACK_COL_MAJOR, 'L', A->m,
+           x.n, tmp.data, A->n, x.data,
            x.m);
     }
     else
     {
-      if (A.type == SYM)
+      if (A->type == SYM)
       {
-        Matrix tmp = copy(A);
-        int *ipiv = calloc(A.m, sizeof(int));
-        LAPACKE_dsysv(LAPACK_COL_MAJOR, 'L', A.m, x.n, tmp.data, A.n, ipiv, x.data, A.m);
+        Matrix tmp = copy(*A);
+        int *ipiv = calloc(A->m, sizeof(int));
+        LAPACKE_dsysv(LAPACK_COL_MAJOR, 'L', A->m, x.n, tmp.data, A->n, ipiv, x.data, A->m);
         deallocate(tmp);
       }
       else
       {
-        if (A.type == BAND)
+        if (A->type == BAND)
         {
-          Matrix AB = copy(A);
+          if (!A->factored)
+          {
+            A->ipiv = calloc(A->n, sizeof(int));
+            LAPACKE_dgbtrf(LAPACK_COL_MAJOR, A->n, A->n, A->kl, A->ku, A->data, A->m, A->ipiv);
+            A->factored = true;
+            LAPACKE_dgbtrs(LAPACK_COL_MAJOR, 'n', A->n, A->kl, A->ku, x.n, A->data, A->m, A->ipiv, x.data, x.m);
+          }
+          else
+          {
+            LAPACKE_dgbtrs(LAPACK_COL_MAJOR, 'n', A->n, A->kl, A->ku, x.n, A->data, A->m, A->ipiv, x.data, x.m);
+          }
+          Matrix AB = copy(*A);
           // dgbsv stores other stuff in AB, be cautious !!!
 
-          int *ipiv = calloc(A.n, sizeof(int));
-          LAPACKE_dgbsv(LAPACK_COL_MAJOR, AB.n, A.kl, A.ku, 1, AB.data, AB.m, ipiv, x.data, x.m);
+          //int *ipiv = calloc(A->n, sizeof(int));
+          //LAPACKE_dgbsv(LAPACK_COL_MAJOR, AB.n, A->kl, A->ku, 1, AB.data, AB.m, ipiv, x.data, x.m);
         }
         else
         {
-          //printf("USING DGETRF\n");
-          Matrix tmp = copy(A);
-          int *ipiv = calloc(A.m, sizeof(int));
-          LAPACKE_dgetrf(LAPACK_COL_MAJOR, A.m, A.n, tmp.data, A.n, ipiv);
-          LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'n', A.m, 1, tmp.data, A.m, ipiv, x.data, A.m);
+          if (!A->factored)
+          {
+            printf("crabe\n%d ,%d,%d", A->m, A->n, A->kl);
+            A->ipiv = calloc(A->m, sizeof(int));
+            LAPACKE_dgetrf(LAPACK_COL_MAJOR, A->m, A->n, A->data, A->n, A->ipiv);
+            A->factored = true;
+            LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'n',
+                           A->m, x.n, A->data, A->m, A->ipiv, x.data, A->m);
+          }
+          else
+          {
+            LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'n',
+                           A->m, x.n, A->data, A->m, A->ipiv, x.data, A->m);
+          }
         }
       }
     }
@@ -226,8 +259,8 @@ void band_store(Matrix *A, unsigned KU, unsigned KL)
 {
   int K = KL + KU;
   Matrix AB = {.m=1 + 2 * KL + KU, .n=A->n, .data=NULL};
-
   allocate(&AB);
+
   for_range(j, A->n)
   {
     int imax = min(A->n, j + (int) KL + 1);

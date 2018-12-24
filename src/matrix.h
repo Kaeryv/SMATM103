@@ -9,6 +9,8 @@
 #define EXAMTD_MATRIX_H
 
 #include "kinds.h"
+#include <stdbool.h>
+
 
 /**
  * \brief Macro for accessing array elements
@@ -47,6 +49,8 @@ struct Matrix
     enum MatrixType type;    ///< Structure hint
     unsigned kl;             ///< Subdiagonals
     unsigned ku;             ///< Overdiagonals
+    bool factored;
+    int *restrict ipiv;
 };
 
 
@@ -110,7 +114,7 @@ Matrix copy(Matrix src);
  * \param b
  * \return x
  */
-Matrix solve(Matrix A, Matrix b);
+Matrix solve(Matrix *A, Matrix b);
 
 /**
  * \brief Solve without allocation
@@ -119,7 +123,7 @@ Matrix solve(Matrix A, Matrix b);
  * \param b
  * \param x The already allocated return handle
  */
-void ssolve(Matrix A, Matrix b, Matrix x);
+void ssolve(Matrix *A, Matrix b, Matrix x);
 
 /**
  * \brief Convert DENSE matrix handle to BAND matrix handle.

@@ -82,7 +82,7 @@ int pcgradient(Matrix A, Matrix b, Matrix x, Matrix M, const char *path)
   cblas_dsymv(CblasColMajor, CblasLower, A.m, 1.0, A.data, A.m, x.data, 1, -1.0, r.data, 1);
 
   // We solve the pre-conditionning system  M y = r
-  Matrix y = solve(M, r);
+  Matrix y = solve(&M, r);
 
   Matrix pk = copy(y);
   cblas_dscal(A.m, -1.0, pk.data, 1);
@@ -113,7 +113,7 @@ int pcgradient(Matrix A, Matrix b, Matrix x, Matrix M, const char *path)
     }
 
     // Solve My=r
-    ssolve(M, r, y);
+    ssolve(&M, r, y);
 
     beta = cblas_ddot(r.m, r.data, 1, y.data, 1) / beta;
 

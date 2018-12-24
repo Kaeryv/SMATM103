@@ -62,7 +62,7 @@ Matrix precond_ssor(Matrix A, real omega)
 
 
   // La matrice en sortie est SymDefPos
-  D.type = DENSE;
+  D.type = SDP;
   dump(D, "M_SSOR.txt");
   return D;
 }
@@ -94,13 +94,13 @@ Matrix precond_spectral(Matrix A, int order)
     AT(M, i, i) = 1.0;
     for_range(j, M.n)
     {
-      for_range(k, order)
+      for_range(k, 50)
       {
         AT(M, i, j) += (AT(eigenvalues, k, 0) - 1.0) * AT(eigenvectors, i, k) * AT(eigenvectors, j, k);
       }
     }
   }
-  M.type = DENSE;
+  M.type = SYM;
   dump(M, "M_SPECTRAL.txt");
   return M;
 }
